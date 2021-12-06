@@ -144,3 +144,14 @@ dmypy.json
 .history/
 
 .mypy_cache
+
+# Pycharm
+.idea/
+
+__pycache__/
+
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover 
