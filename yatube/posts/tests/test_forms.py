@@ -7,6 +7,7 @@ from posts.models import Group, Post, User
 
 HOME_URL = reverse('posts:index')
 CREATE_URL = reverse('posts:post_create')
+LOGIN_URL = reverse('users:login')
 USERNAME = 'testuser'
 GROUP_TITLE = 'Тестовая группа'
 GROUP_SLUG = 'test-slug'
@@ -31,11 +32,13 @@ class PostsFormsTests(TestCase):
     def setUp(self):
         self.user = PostsFormsTests.user
         self.post = PostsFormsTests.post
+        self.guest_client = Client()
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
         self.group = PostsFormsTests.group
         self.post_edit = reverse('posts:post_edit', args=[self.post.id])
         self.posts_count = Post.objects.count()
+        self.redirected = f'{LOGIN_URL}?next={CREATE_URL}'
 
     def test_valid_form_create_post_in_db(self):
         form_data = {
@@ -47,12 +50,13 @@ class PostsFormsTests(TestCase):
         )
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.post.refresh_from_db()
-        response = self.authorized_client.get(HOME_URL)
-        test_post = (
-            response.context['page_obj'].paginator.object_list
-            .order_by('-id')[0]
-        )
-        self.assertEqual(test_post.id, Post.objects.count())
+        num_posts_after = Post.objects.count()
+        self.posts_count += 1
+        test_post_create = Post.objects.latest('id')
+        self.assertEqual(test_post_create.text, form_data['text'])
+        self.assertEqual(test_post_create.group.id, form_data['group'])
+        self.assertEqual(test_post_create.author.id, self.user.id)
+        self.assertEqual(self.posts_count, num_posts_after)
 
     def test_valid_form_change_post_in_db(self):
         response = self.authorized_client.get(self.post_edit)
@@ -65,12 +69,22 @@ class PostsFormsTests(TestCase):
         )
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.post.refresh_from_db()
-        response = self.authorized_client.get(HOME_URL)
-        test_post = (
-            response.context['page_obj'].paginator.object_list
-            .order_by('-id')[0]
+        num_posts_after = Post.objects.count()
+        test_post_edit = Post.objects.latest('id')
+        self.assertEqual(test_post_edit.text, form_data['text'])
+        self.assertEqual(test_post_edit.group.id, form_data['group'])
+        self.assertEqual(test_post_edit.author.id, self.user.id)
+        self.assertEqual(self.posts_count, num_posts_after)
+
+    def test_unauthorized_client_cannot_create_post(self):
+        form_data = {
+            'text': f'{TEXT_POST}3',
+            'group': self.group.id,
+        }
+        response = self.guest_client.post(
+            CREATE_URL, data=form_data, follow=True
         )
-        test_count = Post.objects.count()
-        self.assertEqual(test_count, self.posts_count)
-        self.assertEqual(test_post.id, self.post.id)
-        self.assertEqual(test_post.text, self.post.text)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
+        self.assertRedirects(response, self.redirected)
+        num_posts_after = Post.objects.count()
+        self.assertEqual(self.posts_count, num_posts_after)

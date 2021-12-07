@@ -33,12 +33,15 @@ class PostsPagesTests(TestCase):
             title=GROUP_TITLE + '2',
             slug=GROUP_SLUG + '2',
         )
-        for i in range(1, 14):
-            cls.post = Post.objects.create(
-                author=cls.user,
-                text=TEXT_POST + f'{i}',
-                group=cls.group,
-            )
+        cls.post = Post.objects.create(
+            author=cls.user,
+            text=TEXT_POST,
+            group=cls.group,
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
 
     def setUp(self):
         self.user = PostsPagesTests.user
@@ -125,6 +128,23 @@ class PostsPagesTests(TestCase):
         self.post.refresh_from_db()
         self.assertEqual(data['text'], self.post.text)
         self.assertEqual(data['group'], self.post.group.id)
+
+
+class TestPaginator(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username=USERNAME)
+        self.group = Group.objects.create(
+            title=GROUP_TITLE,
+            slug=GROUP_SLUG,
+        )
+        self.post = Post.objects.bulk_create(
+            [Post(text=f'{TEXT_POST}{i}', author=self.user, group=self.group)
+             for i in range(14)]
+        )
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.user)
+        self.group_list = reverse('posts:group_list', args=[self.group.slug])
+        self.profile = reverse('posts:profile', args=[self.user])
 
     def test_paginator(self):
         reverse_names_templates = {
